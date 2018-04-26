@@ -38,6 +38,8 @@ class Leaderboard:
     kills_global = 0
     time_global = 0
     gems_global = 0
+    shots_hit_global = 0
+    shots_fired_global = 0
     players = 0
     entries = []
     top_100 = []
@@ -55,11 +57,13 @@ class Leaderboard:
         req = requests.post("http://dd.hasmodai.com/backend15/get_scores.php", post_values)
         self.leaderboard_data = req.content
 
-        self.deaths_global = to_uint_64(self.leaderboard_data, 11)
-        self.kills_global  = to_uint_64(self.leaderboard_data, 19)
-        self.time_global   = to_uint_64(self.leaderboard_data, 35) / 10000
-        self.gems_global   = to_uint_64(self.leaderboard_data, 43)
-        self.players       = to_int_32(self.leaderboard_data, 75)
+        self.deaths_global      = to_uint_64(self.leaderboard_data, 11)
+        self.kills_global       = to_uint_64(self.leaderboard_data, 19)
+        self.time_global        = to_uint_64(self.leaderboard_data, 35) / 10000
+        self.gems_global        = to_uint_64(self.leaderboard_data, 43)
+        self.shots_hit_global   = to_uint_64(self.leaderboard_data, 51)
+        self.shots_fired_global = to_uint_64(self.leaderboard_data, 27)
+        self.players            = to_int_32(self.leaderboard_data, 75)
 
         entry_count = to_int_16(self.leaderboard_data, 59)
         rank_iterator = 0
@@ -79,6 +83,7 @@ class Leaderboard:
 
             entry.username = username_bytes.decode("utf-8")
             entry.rank = to_int_32(self.leaderboard_data, byte_pos)
+            entry.userid = to_int_32(self.leaderboard_data, byte_pos + 4)
             entry.time = to_int_32(self.leaderboard_data, byte_pos + 8) / 10000
             entry.kills = to_int_32(self.leaderboard_data, byte_pos + 12)
             entry.gems = to_int_32(self.leaderboard_data, byte_pos + 24)
@@ -150,6 +155,7 @@ class UserSearch:
 
             entry.username = username_bytes.decode("utf-8")
             entry.rank = to_int_32(self.user_search_data, byte_pos)
+            entry.userid = to_int_32(self.user_search_data, byte_pos + 4)
             entry.time = to_int_32(self.user_search_data, byte_pos + 12) / 10000
             entry.kills = to_int_32(self.user_search_data, byte_pos + 16)
             entry.gems = to_int_32(self.user_search_data, byte_pos + 28)
@@ -176,6 +182,7 @@ class UserSearch:
 
 class Entry:
     username = ""
+    userid = 0
     rank = 0
     time = 0
     kills = 0
@@ -217,13 +224,15 @@ def server_stats(message):
     kills_global = leaderboard.kills_global
     time_global = leaderboard.time_global
     gems_global = leaderboard.gems_global
+    accuracy_global = leaderboard.shots_hit_global / leaderboard.shots_fired_global
     players = leaderboard.players
     msg = '```css\n' + \
-            '[Global Time]   {:,}s\n'.format(time_global) +\
-            '[Global Kills]  {:,}\n'.format(kills_global) +\
-            '[Global Gems]   {:,}\n'.format(gems_global) +\
-            '[Global Deaths] {:,}\n'.format(deaths_global) +\
-            '[Total Players] {:,}\n'.format(players) +\
+            '[Global Time]     {:,}s\n'.format(time_global) +\
+            '[Global Kills]    {:,}\n'.format(kills_global) +\
+            '[Global Gems]     {:,}\n'.format(gems_global) +\
+            '[Global Deaths]   {:,}\n'.format(deaths_global) +\
+            '[Global Accuracy] {:,}\n'.format(accuracy_global) +\
+            '[Total Players]   {:,}\n'.format(players) +\
             '```'
     return msg
 
@@ -235,6 +244,8 @@ def global_stats():
     embed.add_field(name="Global Kills", value="{:,}".format(leaderboard.kills_global), inline=False)
     embed.add_field(name="Global Gems", value="{:,}".format(leaderboard.gems_global), inline=False)
     embed.add_field(name="Global Deaths", value="{:,}".format(leaderboard.deaths_global), inline=False)
+    # embed.add_field(name="Global Accuracy",
+                    # value="{:,}".format(leaderboard.shots_fired_global/leaderboard.shots_hit_global), inline=False)
     embed.add_field(name="Total Players", value="{:,}".format(leaderboard.players), inline=False)
     return embed
 
@@ -252,7 +263,8 @@ def stats(message):
         return None
     leaderboard.update(rank_choice-1)
     entry = leaderboard.entries[0]
-    embed = discord.Embed(title=entry.username, description="Rank {:,}".format(entry.rank),
+    embed = discord.Embed(title="{} ({})".format(entry.username, entry.userid),
+                          description="Rank {:,}".format(entry.rank),
                           color=0x660000)
     embed.add_field(name="Time", value="{:.4f}s".format(entry.time), inline=True)
     embed.add_field(name="Kills", value="{:,}".format(entry.kills), inline=True)

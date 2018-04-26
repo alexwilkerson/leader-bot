@@ -125,18 +125,7 @@ class Leaderboard:
 
 class UserSearch:
     user_search_data = ""
-
-    # deaths_global = 0
-    # kills_global = 0
-    # time_global = 0
-    # gems_global = 0
-    # players = 0
     entries = []
-    # top_100 = []
-    # old_top_100 = []
-
-    # def __init__(self):
-    # self.update('0')
 
     def search(self, user):
 
@@ -144,12 +133,6 @@ class UserSearch:
 
         req = requests.post("http://dd.hasmodai.com/backend16/get_user_search_public.php", post_values)
         self.user_search_data = req.content
-
-        # self.deaths_global = to_uint_64(self.leaderboard_data, 11)
-        # self.kills_global  = to_uint_64(self.leaderboard_data, 19)
-        # self.time_global   = to_uint_64(self.leaderboard_data, 35) / 10000
-        # self.gems_global   = to_uint_64(self.leaderboard_data, 43)
-        # self.players       = to_int_32(self.leaderboard_data, 75)
 
         entry_count = to_int_16(self.user_search_data, 11)
         rank_iterator = 0
@@ -190,24 +173,6 @@ class UserSearch:
 
             rank_iterator += 1
 
-    # def print_range(self, start, end):
-    #     self.update()
-    #     out = ""
-    #     for i in range(start-1, end):
-    #         out += str(self.entries[i]) + "\n\n"
-    #     return out
-
-    # def print_range_compact(self, start, end):
-    #     self.update()
-    #     out = "```"
-    #     for i in range(start-1, end):
-    #         out += "#{} {} ({})".format(self.entries[i].rank, self.entries[i].username,
-    #                 self.entries[i].time)
-    #         out += "\n"
-    #     return out + "```"
-
-    # def __str__(self):
-    #     return "{} {} {:,.4f}s {} {}".format(self.deaths_global, self.kills_global, self.time_global, self.gems_global, self.players)
 
 class Entry:
     username = ""
@@ -343,8 +308,6 @@ def user_search(message):
                           color=0x660000)
     users = "```\n"
     for entry in sorted_users:
-        # embed.add_field(name="Rank {}".format(entry.rank),
-        #                 value=entry.username, inline=False)
         users += "{:,}:\n{}\n\n".format(entry.rank, entry.username)
     users = users[:-1]
     over100 = ""

@@ -123,6 +123,91 @@ class Leaderboard:
     def __str__(self):
         return "{} {} {:,.4f}s {} {}".format(self.deaths_global, self.kills_global, self.time_global, self.gems_global, self.players)
 
+class UserSearch:
+    user_search_data = ""
+
+    # deaths_global = 0
+    # kills_global = 0
+    # time_global = 0
+    # gems_global = 0
+    # players = 0
+    entries = []
+    # top_100 = []
+    # old_top_100 = []
+
+    # def __init__(self):
+    # self.update('0')
+
+    def search(self, user):
+
+        post_values = dict(search=user)
+
+        req = requests.post("http://dd.hasmodai.com/backend16/get_user_search_public.php", post_values)
+        self.user_search_data = req.content
+
+        # self.deaths_global = to_uint_64(self.leaderboard_data, 11)
+        # self.kills_global  = to_uint_64(self.leaderboard_data, 19)
+        # self.time_global   = to_uint_64(self.leaderboard_data, 35) / 10000
+        # self.gems_global   = to_uint_64(self.leaderboard_data, 43)
+        # self.players       = to_int_32(self.leaderboard_data, 75)
+
+        entry_count = to_int_16(self.user_search_data, 11)
+        rank_iterator = 0
+        byte_pos = 19
+        self.entries = []
+        while(rank_iterator < entry_count):
+            entry = Entry()
+            username_length = to_int_16(self.user_search_data, byte_pos)
+            username_bytes = bytearray(username_length)
+            byte_pos += 2
+            for i in range(byte_pos, byte_pos + username_length):
+                username_bytes[i-byte_pos] = self.user_search_data[i]
+
+            byte_pos += username_length
+
+            entry.username = username_bytes.decode("utf-8")
+            entry.rank = to_int_32(self.user_search_data, byte_pos)
+            entry.time = to_int_32(self.user_search_data, byte_pos + 12) / 10000
+            entry.kills = to_int_32(self.user_search_data, byte_pos + 16)
+            entry.gems = to_int_32(self.user_search_data, byte_pos + 28)
+            entry.shots_hit = to_int_32(self.user_search_data, byte_pos + 24)
+            entry.shots_fired = to_int_32(self.user_search_data, byte_pos + 20)
+            if entry.shots_fired == 0:
+                entry.shots_fired = 1
+            entry.death_type = death_types[to_int_16(self.user_search_data, byte_pos + 32)]
+            entry.time_total = to_uint_64(self.user_search_data, byte_pos + 60) / 10000
+            entry.kills_total = to_uint_64(self.user_search_data, byte_pos + 48)
+            entry.gems_total = to_uint_64(self.user_search_data, byte_pos + 68)
+            entry.deaths_total = to_uint_64(self.user_search_data, byte_pos + 36)
+            entry.shots_hit_total = to_uint_64(self.user_search_data, byte_pos + 76)
+            entry.shots_fired_total = to_uint_64(self.user_search_data, byte_pos + 52)
+            if entry.shots_fired_total == 0:
+                entry.shots_fired_total = 1
+
+            byte_pos += 88
+
+            self.entries.append(entry)
+
+            rank_iterator += 1
+
+    # def print_range(self, start, end):
+    #     self.update()
+    #     out = ""
+    #     for i in range(start-1, end):
+    #         out += str(self.entries[i]) + "\n\n"
+    #     return out
+
+    # def print_range_compact(self, start, end):
+    #     self.update()
+    #     out = "```"
+    #     for i in range(start-1, end):
+    #         out += "#{} {} ({})".format(self.entries[i].rank, self.entries[i].username,
+    #                 self.entries[i].time)
+    #         out += "\n"
+    #     return out + "```"
+
+    # def __str__(self):
+    #     return "{} {} {:,.4f}s {} {}".format(self.deaths_global, self.kills_global, self.time_global, self.gems_global, self.players)
 
 class Entry:
     username = ""
@@ -202,7 +287,7 @@ def stats(message):
         return None
     leaderboard.update(rank_choice-1)
     entry = leaderboard.entries[0]
-    embed = discord.Embed(title=entry.username, description="Rank {}".format(entry.rank),
+    embed = discord.Embed(title=entry.username, description="Rank {:,}".format(entry.rank),
                           color=0x660000)
     embed.add_field(name="Time", value="{:.4f}s".format(entry.time), inline=True)
     embed.add_field(name="Kills", value="{:,}".format(entry.kills), inline=True)
@@ -227,6 +312,50 @@ def top10():
         entry = leaderboard.entries[i]
         embed.add_field(name="{}. {}".format(entry.rank, entry.username),
                         value="{:.4f}s".format(entry.time), inline=False)
+    return embed
+
+
+def user_search(message):
+    user = " ".join(message.content.strip().split()[1:])
+    usersearch.search(user)
+    number_users_found = len(usersearch.entries)
+    if number_users_found == 1:
+        entry = usersearch.entries[0]
+        embed = discord.Embed(title=entry.username, description="Rank {:,}".format(entry.rank),
+                              color=0x660000)
+        embed.add_field(name="Time", value="{:.4f}s".format(entry.time), inline=True)
+        embed.add_field(name="Kills", value="{:,}".format(entry.kills), inline=True)
+        embed.add_field(name="Gems", value="{:,}".format(entry.gems), inline=True)
+        embed.add_field(name="Accuracy", value="{:.2f}".format((entry.shots_hit/entry.shots_fired)*100), inline=True)
+        embed.add_field(name="Death Type", value=entry.death_type, inline=True)
+        embed.add_field(name="Total Time", value="{:,.4f}s".format(entry.time_total), inline=True)
+        embed.add_field(name="Total Time (in days)", value="{:,.2f}".format(entry.time_total / 84600), inline=True)
+        embed.add_field(name="Kills Total", value="{:,}".format(entry.kills_total), inline=True)
+        embed.add_field(name="Gems Total", value="{:,}".format(entry.gems_total), inline=True)
+        embed.add_field(name="Accuracy Total",
+                        value="{:.2f}".format((entry.shots_hit_total/entry.shots_fired_total)*100),
+                        inline=True)
+        embed.add_field(name="Deaths Total", value="{:,}".format(entry.deaths_total), inline=True)
+        return embed
+
+    sorted_users = sorted(usersearch.entries, key=lambda user: user.rank)[:10]
+    embed = discord.Embed(title="Search: \"{}\"".format(user),
+                          color=0x660000)
+    users = "```\n"
+    for entry in sorted_users:
+        # embed.add_field(name="Rank {}".format(entry.rank),
+        #                 value=entry.username, inline=False)
+        users += "{:,}:\n{}\n\n".format(entry.rank, entry.username)
+    users = users[:-1]
+    over100 = ""
+    showing = ""
+    if number_users_found > 10:
+        showing = " (showing 10)"
+    if number_users_found == 100:
+        over100 = "+"
+    users += "```"
+    embed.add_field(name="Found {}{} Users{}:".format(str(number_users_found), over100, showing),
+                    value=users, inline=False)
     return embed
 
 
@@ -257,7 +386,7 @@ class LeaderBot(discord.Client):
         while not self.is_closed:
             leaderboard.update('0')
             updates = [x for x in leaderboard.top_100 if x not in leaderboard.old_top_100]
-            if len(updates) > 0:
+            if len(updates) > 0 and len(updates) < 2:
                 for entry in updates:
                     await self.send_message(channel, embed=new_top_100(entry))
             await asyncio.sleep(30)
@@ -269,14 +398,18 @@ class LeaderBot(discord.Client):
         # if the bot sees the command !hello we will respond with our msg string
         if message.content.startswith('.stats'):
             embed = stats(message)
-            # if msg != 'ERROR':
             if embed is not None:
                 await self.send_message(message.channel, embed=embed)
         if message.content.startswith('.top10'):
             embed = top10()
             await self.send_message(message.channel, embed=embed)
+        if message.content.startswith('.search'):
+            embed = user_search(message)
+            if embed is not None:
+                await self.send_message(message.channel, embed=embed)
 
 
 leaderboard = Leaderboard()
+usersearch = UserSearch()
 client = LeaderBot()
 client.run(client_token.token)

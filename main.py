@@ -2,9 +2,10 @@ import discord
 import asyncio
 import requests
 import client_token
-from threading import Lock
+import sqlite3
 
-lock = Lock()
+db = sqlite3.connect('users')
+cursor = db.cursor()
 
 death_types = ["FALLEN", "SWARMED", "IMPALED", "GORED", "INFESTED", "OPENED", "PURGED",
                "DESECRATED", "SACRIFICED", "EVISCERATED", "ANNIHILATED", "INTOXICATED", "ENVENOMATED",
@@ -48,11 +49,14 @@ class Leaderboard:
     def __init__(self):
         self.update('0')
 
-    def update(self, _offset):
+    def update(self, _offset, dd_id=None):
         if _offset == '0':
             self.old_top_100 = self.top_100
 
-        post_values = dict(user='0', level='survival', offset=_offset)
+        if dd_id is None:
+            dd_id = '151162'
+
+        post_values = dict(user=dd_id, level='survival', offset=_offset)
 
         req = requests.post("http://dd.hasmodai.com/backend15/get_scores.php", post_values)
         self.leaderboard_data = req.content
@@ -71,7 +75,7 @@ class Leaderboard:
         if _offset == '0':
             self.top_100 = []
         self.entries = []
-        while(rank_iterator < entry_count):
+        while(byte_pos < len(self.leaderboard_data)):
             entry = Entry()
             username_length = to_int_16(self.leaderboard_data, byte_pos)
             username_bytes = bytearray(username_length)
@@ -104,7 +108,8 @@ class Leaderboard:
             byte_pos += 84
 
             if _offset == '0':
-                self.top_100.append(entry)
+                if len(self.top_100) <= 100:
+                    self.top_100.append(entry)
             self.entries.append(entry)
 
             rank_iterator += 1
@@ -127,6 +132,7 @@ class Leaderboard:
 
     def __str__(self):
         return "{} {} {:,.4f}s {} {}".format(self.deaths_global, self.kills_global, self.time_global, self.gems_global, self.players)
+
 
 class UserSearch:
     user_search_data = ""
@@ -276,7 +282,37 @@ def stats(message):
     embed.add_field(name="Kills Total", value="{:,}".format(entry.kills_total), inline=True)
     embed.add_field(name="Gems Total", value="{:,}".format(entry.gems_total), inline=True)
     embed.add_field(name="Accuracy Total",
-                    value="{:.2f}".format((entry.shots_hit_total/entry.shots_fired_total)*100),
+                    value="{:.2f}%".format((entry.shots_hit_total/entry.shots_fired_total)*100),
+                    inline=True)
+    embed.add_field(name="Deaths Total", value="{:,}".format(entry.deaths_total), inline=True)
+    return embed
+
+
+def user_search_stats(dd_id):
+    entry = Entry()
+    leaderboard.update('0', dd_id)
+    for e in leaderboard.entries:
+        if e.userid == dd_id:
+            entry = e
+            break
+    embed = discord.Embed(title="{} ({})".format(entry.username, entry.userid),
+                          description="Rank {:,}".format(entry.rank),
+                          color=0x660000)
+    embed.add_field(name="Time", value="{:.4f}s".format(entry.time), inline=True)
+    embed.add_field(name="Kills", value="{:,}".format(entry.kills), inline=True)
+    embed.add_field(name="Gems", value="{:,}".format(entry.gems), inline=True)
+    if entry.shots_fired == 0:
+        entry.shots_fired = 1
+    embed.add_field(name="Accuracy", value="{:.2f}".format((entry.shots_hit/entry.shots_fired)*100), inline=True)
+    embed.add_field(name="Death Type", value=entry.death_type, inline=True)
+    embed.add_field(name="Total Time", value="{:,.4f}s".format(entry.time_total), inline=True)
+    embed.add_field(name="Total Time (in days)", value="{:,.2f}".format(entry.time_total / 84600), inline=True)
+    embed.add_field(name="Kills Total", value="{:,}".format(entry.kills_total), inline=True)
+    embed.add_field(name="Gems Total", value="{:,}".format(entry.gems_total), inline=True)
+    if entry.shots_fired_total == 0:
+        entry.shots_fired_total = 1
+    embed.add_field(name="Accuracy Total",
+                    value="{:.2f}%".format((entry.shots_hit_total/entry.shots_fired_total)*100),
                     inline=True)
     embed.add_field(name="Deaths Total", value="{:,}".format(entry.deaths_total), inline=True)
     return embed
@@ -303,7 +339,7 @@ def user_search(message):
         embed.add_field(name="Time", value="{:.4f}s".format(entry.time), inline=True)
         embed.add_field(name="Kills", value="{:,}".format(entry.kills), inline=True)
         embed.add_field(name="Gems", value="{:,}".format(entry.gems), inline=True)
-        embed.add_field(name="Accuracy", value="{:.2f}".format((entry.shots_hit/entry.shots_fired)*100), inline=True)
+        embed.add_field(name="Accuracy", value="{:.2f}%".format((entry.shots_hit/entry.shots_fired)*100), inline=True)
         embed.add_field(name="Death Type", value=entry.death_type, inline=True)
         embed.add_field(name="Total Time", value="{:,.4f}s".format(entry.time_total), inline=True)
         embed.add_field(name="Total Time (in days)", value="{:,.2f}".format(entry.time_total / 84600), inline=True)
@@ -343,11 +379,31 @@ def new_top_100(entry):
     return embed
 
 
+def register(message):
+    split_command = message.content.split()
+    if len(split_command) != 2:
+        return None
+    if not split_command[1].isdigit():
+        return None
+    if int(split_command[1]) < 1 or int(split_command[1]) > leaderboard.players:
+        return None
+    dd_id = int(split_command[1])
+    discord_id = message.author.id
+    cursor.execute('''INSERT OR REPLACE INTO users(discord_id, dd_id) VALUES(?,?)''',
+                   (discord_id, dd_id))
+    db.commit()
+    embed = discord.Embed(title="Registered User",
+                          description="{} now registered to Devil Daggers ID: {}."
+                          .format(message.author.name, dd_id),
+                          color=0x660000)
+    return embed
+
+
 class LeaderBot(discord.Client):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.loop.create_task(self.check_top_100())
+        # self.loop.create_task(self.check_top_100())
 
     async def on_ready(self):
         print("Logged in as")
@@ -361,7 +417,7 @@ class LeaderBot(discord.Client):
         while not self.is_closed:
             leaderboard.update('0')
             updates = [x for x in leaderboard.top_100 if x not in leaderboard.old_top_100]
-            if len(updates) > 0 and len(updates) < 2:
+            if len(updates) > 0 and len(updates) < 3:
                 for entry in updates:
                     await self.send_message(channel, embed=new_top_100(entry))
             await asyncio.sleep(30)
@@ -380,6 +436,21 @@ class LeaderBot(discord.Client):
             await self.send_message(message.channel, embed=embed)
         if message.content.startswith('.search'):
             embed = user_search(message)
+            if embed is not None:
+                await self.send_message(message.channel, embed=embed)
+        if message.content.startswith('.register'):
+            embed = register(message)
+            if embed is not None:
+                await self.send_message(message.channel, embed=embed)
+        if message.content.startswith('.me'):
+            discord_id = message.author.id
+            cursor.execute('''SELECT dd_id FROM users WHERE discord_id=?''', (discord_id,))
+            dd_id = cursor.fetchone()
+            if dd_id:
+                embed = user_search_stats(dd_id[0])
+            else:
+                embed = discord.Embed(title="User Not Registered",
+                                      description="Use the command '.register \[Devil Daggers ID number\]' to link your account.", color=0x660000)
             if embed is not None:
                 await self.send_message(message.channel, embed=embed)
 

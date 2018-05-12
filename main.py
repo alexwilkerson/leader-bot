@@ -69,7 +69,7 @@ class Leaderboard:
         self.shots_fired_global = to_uint_64(self.leaderboard_data, 27)
         self.players            = to_int_32(self.leaderboard_data, 75)
 
-        entry_count = to_int_16(self.leaderboard_data, 59)
+        # entry_count = to_int_16(self.leaderboard_data, 59)
         rank_iterator = 0
         byte_pos = 83
         if _offset == '0':
@@ -171,7 +171,7 @@ class UserSearch:
                 entry.shots_fired = 1
             entry.death_type = death_types[to_int_16(self.user_search_data, byte_pos + 32)]
             entry.time_total = to_uint_64(self.user_search_data, byte_pos + 60) / 10000
-            entry.kills_total = to_uint_64(self.user_search_data, byte_pos + 48)
+            entry.kills_total = to_uint_64(self.user_search_data, byte_pos + 44)
             entry.gems_total = to_uint_64(self.user_search_data, byte_pos + 68)
             entry.deaths_total = to_uint_64(self.user_search_data, byte_pos + 36)
             entry.shots_hit_total = to_uint_64(self.user_search_data, byte_pos + 76)
@@ -219,7 +219,7 @@ class Entry:
 
     def __eq__(self, other):
         try:
-            return (self.rank, self.time, self.kills) == (other.rank, other.time,
+            return (self.username, self.rank, self.time, self.kills) == (other.username, other.rank, other.time,
                     other.kills)
         except AttributeError:
             return NotImplemented
@@ -334,8 +334,8 @@ def user_search(message):
     number_users_found = len(usersearch.entries)
     if number_users_found == 1:
         entry = usersearch.entries[0]
-        embed = discord.Embed(title=entry.username, description="Rank {:,}".format(entry.rank),
-                              color=0x660000)
+        embed = discord.Embed(title="{} ({})".format(entry.username, entry.userid),
+                              description="Rank {:,}".format(entry.rank), color=0x660000)
         embed.add_field(name="Time", value="{:.4f}s".format(entry.time), inline=True)
         embed.add_field(name="Kills", value="{:,}".format(entry.kills), inline=True)
         embed.add_field(name="Gems", value="{:,}".format(entry.gems), inline=True)
@@ -346,7 +346,7 @@ def user_search(message):
         embed.add_field(name="Kills Total", value="{:,}".format(entry.kills_total), inline=True)
         embed.add_field(name="Gems Total", value="{:,}".format(entry.gems_total), inline=True)
         embed.add_field(name="Accuracy Total",
-                        value="{:.2f}".format((entry.shots_hit_total/entry.shots_fired_total)*100),
+                        value="{:.2f}%".format((entry.shots_hit_total/entry.shots_fired_total)*100),
                         inline=True)
         embed.add_field(name="Deaths Total", value="{:,}".format(entry.deaths_total), inline=True)
         return embed
@@ -403,7 +403,7 @@ class LeaderBot(discord.Client):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # self.loop.create_task(self.check_top_100())
+        self.loop.create_task(self.check_top_100())
 
     async def on_ready(self):
         print("Logged in as")

@@ -54,7 +54,7 @@ class Leaderboard:
             self.old_top_100 = self.top_100
 
         if dd_id is None:
-            dd_id = '151162'
+            dd_id = '0'
 
         post_values = dict(user=dd_id, level='survival', offset=_offset)
 
@@ -219,7 +219,7 @@ class Entry:
 
     def __eq__(self, other):
         try:
-            return (self.username, self.rank, self.time, self.kills) == (other.username, other.rank, other.time,
+            return (self.rank, self.time, self.kills) == (other.rank, other.time,
                     other.kills)
         except AttributeError:
             return NotImplemented
@@ -416,6 +416,7 @@ class LeaderBot(discord.Client):
         channel = discord.Object(id=client_token.dd_channel)
         while not self.is_closed:
             leaderboard.update('0')
+            await asyncio.sleep(10)
             updates = [x for x in leaderboard.top_100 if x not in leaderboard.old_top_100]
             if len(updates) > 0 and len(updates) < 3:
                 for entry in updates:
